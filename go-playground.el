@@ -4,6 +4,8 @@
 
 ;; Author: Alexander I.Grafov <grafov@gmail.com>
 ;; URL: https://github.com/grafov/go-playground
+;; Package-Version: 20200818.2215
+;; Package-Commit: ede417a52c0eea1a69658f4c6c6c12d6165e64a4
 ;; Keywords: tools, golang
 ;; Version: 1.7
 ;; Package-Requires: ((emacs "24") (go-mode "1.4.0") (gotest "0.13.0"))
@@ -93,21 +95,44 @@ environment like \"GO111MODULE=on go\")."
   :type 'string
   :group 'go-playground)
 
+(defcustom go-playground-template
+  '(("%path" . file-name)
+    ("%dir" . (file-name-directory file-name))
+    ("%file-name" . (file-name-nondirectory (buffer-file-name)))
+    ("%file-sans" . (file-name-sans-extension (file-name-nondirectory file-name)))
+    ("%file-ext" . (file-name-extension (file-name-nondirectory file-name))))
+  "Default expansion list."
+  :type '(alist :key-type string :value-type sexp)
+  :group 'go-playground)
+
 (define-minor-mode go-playground-mode
   "A place for playing with golang code and export it in short snippets."
   :init-value nil
   :lighter "Play(Go)"
   :keymap '(([C-return] . go-playground-exec)
-	    ([M-return] . go-playground-cmd)))
+	        ([M-return] . go-playground-cmd)))
+
+(defun go-playground--fill-template (file-name format-string)
+  "Apply go-playground-template to FORMAT-STRING."
+  (dolist (template go-playground-template)
+    (while (string-match (car template) format-string)
+      (let ((new-text (save-match-data (eval (cdr template)))))
+        (setq format-string
+              (replace-match
+               (if new-text new-text
+                 (concat "not-found-" (substring (car template) 1)))
+               t nil format-string)))))
+  format-string)
 
 (defun go-playground-snippet-file-name(&optional snippet-name)
   (let* ((file-name (cond (snippet-name)
-			 (go-playground-ask-file-name
-			  (read-string "Go Playground filename: "))
-			 ("snippet")))
-	 (snippet-dir (go-playground-snippet-unique-dir file-name)))
+			              (go-playground-ask-file-name
+			               (read-string "Go Playground filename: "))
+			              ("snippet")))
+	     (snippet-dir (go-playground-snippet-unique-dir file-name)))
     (cd snippet-dir)
-    (shell-command go-playground-init-command)
+    (shell-command (go-playground--fill-template
+                    file-name go-playground-init-command))
     (concat snippet-dir "/" file-name ".go")))
 
 ;
